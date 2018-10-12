@@ -3,6 +3,7 @@ import threading
 import pickle
 import enum
 import random
+import math
 import pygame
 
 
@@ -61,8 +62,8 @@ class Player:
         self.control_down = False
 
     def update(self):
-        self.rect = pygame.Rect(self.position[0], self.position[1], 32, 32)
         self.position += self.velocity
+        self.rect.center = self.position
         self.velocity *= 0.9
 
         if self.control_left:
@@ -85,14 +86,13 @@ class Player:
         image = pygame.Surface((32, 32), pygame.SRCALPHA, 32)
         image.fill(color=color)
 
-        screen_center = pygame.math.Vector2(surface.get_size()) / 2
-        vector = self.position - pivot
-
-        relative_position = screen_center + vector
+        #screen_center = pygame.math.Vector2(surface.get_size()) / 2
+        #vector = self.position - pivot
+        #relative_position = screen_center + vector
 
         image = pygame.transform.rotate(image, self.angle)
-        surface.blit(image, (relative_position[0] - image.get_size()[0] / 2,
-                             relative_position[1] - image.get_size()[1] / 2))
+        surface.blit(image, (self.position[0] - image.get_size()[0] / 2,
+                             self.position[1] - image.get_size()[1] / 2))
 
     def dump_info(self):
         info = {
@@ -110,6 +110,10 @@ class Player:
         self.velocity = info['velocity']
         self.angle = info['angle']
         self.state = info['state']
+
+    def turn_to(self, point):
+        rel_x, rel_y = point - self.position
+        self.angle = -math.degrees(math.atan2(rel_y, rel_x))
 
     def control(self, event):
         if event.type == pygame.KEYDOWN:
@@ -276,17 +280,18 @@ class GameClient:
 
     def loop(self):
         while not self.done:
+            mouse = pygame.mouse.get_pos()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.done = True
                 self.player.control(event)
-
 
             #self.game.draw(self.display,
             #               self.player.rect.center + self.player.position)
             self.game.draw(self.display, pygame.math.Vector2(0, 0))
 
             self.game.update()
+            self.player.turn_to(mouse)
             pygame.display.update()
 
             self.clock.tick(60)
