@@ -3,7 +3,6 @@ import threading
 import pickle
 import enum
 import random
-import time
 import pygame
 
 
@@ -187,7 +186,7 @@ class GameServer:
             self.game.players.append(player)
 
             player.position = pygame.math.Vector2(random.randint(0, 400), random.randint(0, 300))
-            
+
             player_info = player.dump_info()
             message = Message(MessageType.NEW_PLAYER_INFO, player_info)
             data = pickle.dumps(message)
@@ -204,19 +203,15 @@ class GameServer:
             player_info = message.data
 
             for player in self.game.players:
-                if player.id == player_info['id']:
-                    player.load_info(player_info)
-                    break
-
-            for player in self.game.players:
                 if player.state == PlayerState.CURRENT:
                     player.state = PlayerState.ONLINE
+                if player.id == player_info['id']:
+                    player.load_info(player_info)
 
-            conn_list = [c for c in self.connections if c is not player_conn and c.is_active()] 
-            for conn in conn_list:
-                message = Message(MessageType.PLAYER_INFO_BROADCAST, player_info)
-                data = pickle.dumps(message)
-                conn.sock.sendall(data)
+            game_info = self.game.dump_info()
+            message = Message(MessageType.GAME_INFO_SEND, game_info)
+            data = pickle.dumps(message)
+            player_conn.sock.sendall(data)
 
     def loop(self):
         while True:
@@ -225,17 +220,12 @@ class GameServer:
                     data = conn.sock.recv(BUFFER_SIZE)
                     message = pickle.loads(data)
                     self.handle_message(conn, message)
-                except:
+                except pickle.UnpicklingError:
+                    pass
+                except ConnectionResetError as e:
                     print("Client {} disconnected.".format(conn.address))
                     conn.disconnect()
                     player_info = conn.player.dump_info()
-
-                    # Broadcast that the player is in disconnected state
-                    message = Message(MessageType.PLAYER_INFO_BROADCAST, player_info)
-                    data = pickle.dumps(message)
-
-                    for connection in [c for c in self.connections if c.is_active()]:
-                        connection.sock.sendall(data)
 
 
 class GameClient:
@@ -278,37 +268,19 @@ class GameClient:
             self.game.players.append(self.player)
         elif message.type == MessageType.GAME_INFO_SEND:
             player_info = self.player.dump_info()
+            player_info['state'] = PlayerState.ONLINE
             game_info = message.data
             self.game.load_info(game_info)
+            player_info['state'] = PlayerState.CURRENT
             self.player.load_info(player_info)
-        elif message.type == MessageType.PLAYER_INFO_BROADCAST:
-            player_info = message.data
-            player_exists = False
-            for player in self.game.players:
-                if player.id == player_info['id']:
-                    player.load_info(player_info)
-                    if player.state == PlayerState.CURRENT:
-                        player.state = PlayerState.ONLINE
-                    player_exists = True
-                    break
-            if not player_exists:
-                new_player = Player(player_info['id'])
-                new_player.load_info(player_info)
-                self.game.players.append(new_player)
 
     def loop(self):
-        try:
-            message = Message(MessageType.GAME_INFO_REQUEST)
-            data = pickle.dumps(message)
-            self.client_socket.sendall(data)
-        except BrokenPipeError:
-            pass
-
         while not self.done:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.done = True
                 self.player.control(event)
+
 
             #self.game.draw(self.display,
             #               self.player.rect.center + self.player.position)
@@ -319,12 +291,9 @@ class GameClient:
 
             self.clock.tick(60)
 
-            try:
-                message = Message(MessageType.PLAYER_INFO, self.player.dump_info())
-                data = pickle.dumps(message)
-                self.client_socket.sendall(data)
-            except BrokenPipeError:
-                pass
+            message = Message(MessageType.PLAYER_INFO, self.player.dump_info())
+            data = pickle.dumps(message)
+            self.client_socket.sendall(data)
 
         pygame.quit()
 
