@@ -463,7 +463,7 @@ class GameClient:
 
 
 def main():
-    server_address = ('https://multiplayer-test-pygame.herokuapp.com', 12345)
+    server_address = ('localhost', 12345)
     if len(sys.argv) > 1:
         game_server = GameServer(server_address)
         game_server.loop()
