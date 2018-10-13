@@ -5,6 +5,7 @@ import enum
 import random
 import math
 import time
+import sys
 import pygame
 
 
@@ -463,7 +464,7 @@ class GameClient:
 
 def main():
     server_address = ('localhost', 12345)
-    if input('[s/c] ') == 's':
+    if len(sys.argv) > 1:
         game_server = GameServer(server_address)
         game_server.loop()
     else:
